@@ -1,34 +1,51 @@
 <?php
 // DB接続設定
-$dsn = 'mysql:dbname=youtube;host=localhost;charset=utf8mb4';
+$host = 'localhost';
+$dbname = 'youtube';
 $user = 'root';
-$password = '';
+$pass = '';
 
 try {
-    $pdo = new PDO($dsn, $user, $password, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-    ]);
+    // まず「mysql」DBに接続（どんな環境でも存在する）
+    $pdo = new PDO("mysql:host=$host;charset=utf8", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // データベースがなければ作成
+    $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci");
+
+    // 作成したDBに接続し直す
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // 必要なテーブルも存在しなければ自動で作成
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS affiliations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS channels (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            subscribers INT DEFAULT 0,
+            affiliation_id INT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (affiliation_id) REFERENCES affiliations(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS comments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            channel_id INT NOT NULL,
+            user_name VARCHAR(100) NOT NULL,
+            message TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (channel_id) REFERENCES channels(id)
+        );
+    ");
+
 } catch (PDOException $e) {
-    exit('DB接続エラー: ' . $e->getMessage());
+    exit('DB接続または作成エラー: ' . $e->getMessage());
 }
-
-// 所属テーブル作成
-$pdo->exec("CREATE TABLE IF NOT EXISTS affiliations (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) UNIQUE NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-
-// チャンネルテーブル作成
-$pdo->exec("CREATE TABLE IF NOT EXISTS channels (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) UNIQUE NOT NULL,
-    subscribers INT NOT NULL,
-    affiliation_id INT,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (affiliation_id) REFERENCES affiliations(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-
 $message = '';
 $error = '';
 
